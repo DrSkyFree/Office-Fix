@@ -1,0 +1,290 @@
+@echo off
+chcp 936 >nul 2>&1
+setlocal enabledelayedexpansion
+
+rem ============================================================
+rem   Right-Click New Menu Template Fix Tool v2.4 (EN)
+rem   Mode: WPS Office / MS Office auto-detect
+rem   Extensions: .xlsx / .pptx / .docx
+rem ============================================================
+
+set SILENT=0
+set RESTART_EXPLORER=0
+
+:parse_args
+if "%~1"=="" goto args_done
+if /i "%~1"=="/silent" set SILENT=1& shift& goto parse_args
+if /i "%~1"=="/quiet" set SILENT=1& shift& goto parse_args
+if /i "%~1"=="/restart" set RESTART_EXPLORER=1& shift& goto parse_args
+shift
+goto parse_args
+:args_done
+
+net session >nul 2>&1
+if errorlevel 1 goto no_admin
+goto admin_ok
+
+:no_admin
+echo [ERROR] Please run this script as Administrator
+echo.
+if "%SILENT%"=="0" pause
+exit /b 1
+
+:admin_ok
+
+echo [Step 1/Clean] Cleaning right-click New menu...
+set CLEAN_COUNT=0
+
+call :clean_ext ".xlsx" "Excel.Sheet.12"
+call :clean_ext ".pptx" "PowerPoint.Show.12"
+call :clean_ext ".docx" "Word.Document.12"
+
+for %%e in (et wps dps) do reg delete "HKCR\%%e" /f >nul 2>&1
+
+echo   Cleaned %CLEAN_COUNT% items
+echo.
+
+echo [Step 2/Detect] Detecting Office installation...
+
+set HAS_MSOFFICE=0
+set HAS_WPS=0
+set "MSOFFICE_PATH="
+set "WPS_INSTALL_PATH="
+set "WPS_VERSION="
+set "WPS_TEMPLATE_DIR="
+
+for /f "skip=2 tokens=2,*" %%a in ('reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\WINWORD.EXE" /ve 2^>nul') do set "MSO_WORD=%%b"
+if defined MSO_WORD if exist "%MSO_WORD%" (
+  set HAS_MSOFFICE=1
+  for %%d in ("%MSO_WORD%") do set "MSOFFICE_PATH=%%~dpd"
+  echo   - MS Office detected
+)
+
+call :detect_wps
+if "%HAS_WPS%"=="1" echo   - WPS Office detected (version %WPS_VERSION%)
+
+if "%HAS_MSOFFICE%"=="0" if "%HAS_WPS%"=="0" echo   [WARNING] No Office software detected
+echo.
+
+echo [Step 3/Fix] Fixing right-click New menu...
+set MODIFY_COUNT=0
+
+set FIX_MODE=
+if "%HAS_MSOFFICE%"=="1" if "%HAS_WPS%"=="0" set FIX_MODE=msoffice
+if "%HAS_WPS%"=="1" set FIX_MODE=wps
+
+if "%FIX_MODE%"=="msoffice" echo   Fix mode: MS Office templates
+if "%FIX_MODE%"=="wps" echo   Fix mode: WPS templates
+
+if not "%FIX_MODE%"=="msoffice" goto skip_msfix
+set XLSX_TEMPLATE=
+set PPTX_TEMPLATE=
+set DOCX_TEMPLATE=
+
+for %%d in (2052 1033) do (
+  if exist "%MSOFFICE_PATH%\%%d\EXCEL.EXE" if exist "%MSOFFICE_PATH%\..\..\Templates\%%d\New\Excel12.xlsx" set "XLSX_TEMPLATE=%MSOFFICE_PATH%\..\..\Templates\%%d\New\Excel12.xlsx"
+  if exist "%MSOFFICE_PATH%\%%d\POWERPNT.EXE" if exist "%MSOFFICE_PATH%\..\..\Templates\%%d\New\PowerPoint12.pptx" set "PPTX_TEMPLATE=%MSOFFICE_PATH%\..\..\Templates\%%d\New\PowerPoint12.pptx"
+  if exist "%MSOFFICE_PATH%\%%d\WINWORD.EXE" if exist "%APPDATA%\Microsoft\Templates\Normal.dotm" set "DOCX_TEMPLATE=%APPDATA%\Microsoft\Templates\Normal.dotm"
+)
+
+call :fix_registry ".xlsx" "Excel.Sheet.12" "%XLSX_TEMPLATE%"
+if errorlevel 1 set /a MODIFY_COUNT+=1
+call :fix_registry ".pptx" "PowerPoint.Show.12" "%PPTX_TEMPLATE%"
+if errorlevel 1 set /a MODIFY_COUNT+=1
+call :fix_registry ".docx" "Word.Document.12" "%DOCX_TEMPLATE%"
+if errorlevel 1 set /a MODIFY_COUNT+=1
+goto fix_done
+:skip_msfix
+
+if not "%FIX_MODE%"=="wps" goto fix_done
+call :prepare_wps_templates
+
+call :fix_registry ".xlsx" "Excel.Sheet.12" "%XLSX_TEMPLATE%"
+if errorlevel 1 set /a MODIFY_COUNT+=1
+call :fix_registry ".pptx" "PowerPoint.Show.12" "%PPTX_TEMPLATE%"
+if errorlevel 1 set /a MODIFY_COUNT+=1
+call :fix_registry ".docx" "Word.Document.12" "%DOCX_TEMPLATE%"
+if errorlevel 1 set /a MODIFY_COUNT+=1
+
+:fix_done
+echo.
+echo   Updating ShellNew cache list...
+call :update_shellnew_cache
+echo.
+
+echo [Step 4/Verify] Verifying fix results...
+set VERIFY_OK=0
+
+reg query "HKCR\.xlsx" /ve 2>&1 | findstr /i "Excel.Sheet.12" >nul 2>&1
+if errorlevel 1 (echo   - [xlsx] ProgID not set) else (
+  reg query "HKCR\.xlsx\ShellNew" /v "FileName" >nul 2>&1
+  if errorlevel 1 (echo   - [xlsx] ShellNew not set) else (echo   - [xlsx] OK & set /a VERIFY_OK+=1)
+)
+reg query "HKCR\.pptx" /ve 2>&1 | findstr /i "PowerPoint.Show.12" >nul 2>&1
+if errorlevel 1 (echo   - [pptx] ProgID not set) else (
+  reg query "HKCR\.pptx\ShellNew" /v "FileName" >nul 2>&1
+  if errorlevel 1 (echo   - [pptx] ShellNew not set) else (echo   - [pptx] OK & set /a VERIFY_OK+=1)
+)
+reg query "HKCR\.docx" /ve 2>&1 | findstr /i "Word.Document.12" >nul 2>&1
+if errorlevel 1 (echo   - [docx] ProgID not set) else (
+  reg query "HKCR\.docx\ShellNew" /v "FileName" >nul 2>&1
+  if errorlevel 1 (echo   - [docx] ShellNew not set) else (echo   - [docx] OK & set /a VERIFY_OK+=1)
+)
+
+echo   Verified: %VERIFY_OK% / 3
+echo.
+
+if "%MODIFY_COUNT%"=="0" goto no_changes
+
+echo ============================================================
+echo   Fix complete! Fixed %MODIFY_COUNT% right-click New items
+echo ============================================================
+echo.
+if "%SILENT%"=="0" msg * Right-click New template fix complete!
+
+if "%FIX_MODE%"=="wps" (
+  echo   WPS version: %WPS_VERSION%
+  echo   Template dir: %FIXED_TEMPLATE_DIR%
+)
+echo.
+echo   Tip: If not effective, restart Explorer or re-login
+echo.
+if "%SILENT%"=="1" goto skip_restart
+choice /c YN /n /m "Restart Explorer now? [Y/N]: "
+if errorlevel 2 goto end_script
+echo   Restarting Explorer...
+taskkill /f /im explorer.exe >nul 2>&1
+start explorer.exe
+goto end_script
+
+:skip_restart
+if "%RESTART_EXPLORER%"=="1" (
+  echo   Restarting Explorer...
+  taskkill /f /im explorer.exe >nul 2>&1
+  start explorer.exe
+)
+goto end_script
+
+:no_changes
+echo   No registry entries modified
+echo.
+
+:end_script
+echo.
+if "%SILENT%"=="0" pause
+endlocal
+ver >nul
+exit /b 0
+
+:clean_ext
+set "_CEXT=%~1"
+set "_CPROGID=%~2"
+reg query "HKCR\%_CEXT%\ShellNew" /v "FileName" >nul 2>&1
+if not errorlevel 1 (
+  echo   - %_CEXT% remove old template (under extension)
+  reg delete "HKCR\%_CEXT%\ShellNew" /v "FileName" /f >nul 2>&1
+  set /a CLEAN_COUNT+=1
+)
+reg delete "HKCR\%_CEXT%\ShellNew" /v "NullFile" /f >nul 2>&1
+reg query "HKCR\%_CEXT%\%_CPROGID%\ShellNew" /v "FileName" >nul 2>&1
+if not errorlevel 1 (
+  echo   - %_CEXT% remove old template (under ProgID)
+  reg delete "HKCR\%_CEXT%\%_CPROGID%\ShellNew" /v "FileName" /f >nul 2>&1
+  set /a CLEAN_COUNT+=1
+)
+exit /b 0
+
+:fix_registry
+set "_EXT=%~1"
+set "_PROGID=%~2"
+set "_TEMPLATE=%~3"
+if "%_TEMPLATE%"=="" echo   [%_EXT%] no template, skip & exit /b 0
+reg add "HKCR\%_EXT%" /f >nul 2>&1
+reg add "HKCR\%_EXT%" /ve /d "%_PROGID%" /f >nul 2>&1
+reg add "HKCR\%_EXT%\ShellNew" /f >nul 2>&1
+reg delete "HKCR\%_EXT%\ShellNew" /v "NullFile" /f >nul 2>&1
+reg add "HKCR\%_EXT%\ShellNew" /v "FileName" /t REG_SZ /d "%_TEMPLATE%" /f >nul 2>&1
+reg add "HKCR\%_EXT%\%_PROGID%" /f >nul 2>&1
+reg add "HKCR\%_EXT%\%_PROGID%\ShellNew" /f >nul 2>&1
+reg add "HKCR\%_EXT%\%_PROGID%\ShellNew" /v "FileName" /t REG_SZ /d "%_TEMPLATE%" /f >nul 2>&1
+if errorlevel 1 echo   [%_EXT%] failed & exit /b 0
+echo   [%_EXT%] fix success
+exit /b 1
+
+:update_shellnew_cache
+set "_CACHE_KEY=HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Discardable\PostSetup\ShellNew"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p='HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Discardable\PostSetup\ShellNew'; $current=(Get-ItemProperty -Path $p -Name 'Classes' -ErrorAction SilentlyContinue).Classes; if(-not $current){$current=@()}; $list=[System.Collections.ArrayList]@(); foreach($i in $current){[void]$list.Add($i)}; foreach($e in @('.xlsx','.pptx','.docx')){ if($list -notcontains $e){[void]$list.Add($e); Write-Host ('  add '+$e)} }; $rk=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\Explorer\Discardable\PostSetup\ShellNew',$true); $rk.SetValue('Classes',$list.ToArray([string]),[Microsoft.Win32.RegistryValueKind]::MultiString); $rk.Close(); Write-Host '  ShellNew cache updated'"
+if errorlevel 1 (
+  echo   [WARNING] ShellNew cache update failed
+) else (
+  echo   ShellNew cache update success
+)
+exit /b 0
+
+:detect_wps
+for /f "skip=2 tokens=2,*" %%a in ('reg query "HKLM\SOFTWARE\Kingsoft\Office" /v "InstallRoot" 2^>nul') do set "WPS_INSTALL_PATH=%%b"
+
+if not defined WPS_INSTALL_PATH if exist "C:\Program Files\Kingsoft\WPS Office" set "WPS_INSTALL_PATH=C:\Program Files\Kingsoft\WPS Office"
+if not defined WPS_INSTALL_PATH if exist "C:\Program Files (x86)\Kingsoft\WPS Office" set "WPS_INSTALL_PATH=C:\Program Files (x86)\Kingsoft\WPS Office"
+
+if defined WPS_INSTALL_PATH if exist "%WPS_INSTALL_PATH%" (
+  for /f "delims=" %%d in ('dir /b /ad "%WPS_INSTALL_PATH%" 2^>nul ^| findstr /r "^[0-9][0-9]*\.[0-9]"') do (
+    if exist "%WPS_INSTALL_PATH%\%%d\office6\et.exe" (
+      set "WPS_VERSION=%%d"
+      set HAS_WPS=1
+    )
+  )
+)
+
+if "%HAS_WPS%"=="1" set "WPS_TEMPLATE_DIR=%WPS_INSTALL_PATH%\%WPS_VERSION%\office6\mui\zh_CN\templates"
+exit /b 0
+
+:prepare_wps_templates
+set "FIXED_TEMPLATE_DIR=C:\ProgramData\WPS Templates"
+echo   Fixed template dir: %FIXED_TEMPLATE_DIR%
+if not exist "%FIXED_TEMPLATE_DIR%" mkdir "%FIXED_TEMPLATE_DIR%" >nul 2>&1
+
+set "WPS_VERSION_FILE=%FIXED_TEMPLATE_DIR%\.wps_version"
+set WPS_NEED_UPDATE=0
+
+if not exist "%WPS_VERSION_FILE%" set WPS_NEED_UPDATE=1
+if "%WPS_NEED_UPDATE%"=="1" echo   First run, copying templates...
+if "%WPS_NEED_UPDATE%"=="1" goto do_copy
+
+for /f "usebackq delims=" %%v in ("%WPS_VERSION_FILE%") do set SAVED_WPS_VERSION=%%v
+if not "%SAVED_WPS_VERSION%"=="%WPS_VERSION%" (
+  set WPS_NEED_UPDATE=1
+  echo   WPS updated, re-copying templates...
+  goto do_copy
+)
+
+if not exist "%FIXED_TEMPLATE_DIR%\newfile.xlsx" set WPS_NEED_UPDATE=1
+if not exist "%FIXED_TEMPLATE_DIR%\newfile.pptx" set WPS_NEED_UPDATE=1
+if not exist "%FIXED_TEMPLATE_DIR%\Normal.dotm" set WPS_NEED_UPDATE=1
+if "%WPS_NEED_UPDATE%"=="1" echo   Template files incomplete, re-copying...
+if "%WPS_NEED_UPDATE%"=="1" goto do_copy
+
+echo   WPS version unchanged, skip copy
+goto skip_copy
+
+:do_copy
+if exist "%WPS_TEMPLATE_DIR%\newfile.xlsx" (
+  copy /y "%WPS_TEMPLATE_DIR%\newfile.xlsx" "%FIXED_TEMPLATE_DIR%\newfile.xlsx" >nul 2>&1
+  echo   [xlsx] copied
+)
+if exist "%WPS_TEMPLATE_DIR%\newfile.pptx" (
+  copy /y "%WPS_TEMPLATE_DIR%\newfile.pptx" "%FIXED_TEMPLATE_DIR%\newfile.pptx" >nul 2>&1
+  echo   [pptx] copied
+)
+if exist "%WPS_TEMPLATE_DIR%\Normal.dotm" (
+  copy /y "%WPS_TEMPLATE_DIR%\Normal.dotm" "%FIXED_TEMPLATE_DIR%\Normal.dotm" >nul 2>&1
+  echo   [docx] copied
+)
+> "%WPS_VERSION_FILE%" echo %WPS_VERSION%
+echo   Version recorded: %WPS_VERSION%
+
+:skip_copy
+if exist "%FIXED_TEMPLATE_DIR%\newfile.xlsx" set "XLSX_TEMPLATE=%FIXED_TEMPLATE_DIR%\newfile.xlsx"
+if exist "%FIXED_TEMPLATE_DIR%\newfile.pptx" set "PPTX_TEMPLATE=%FIXED_TEMPLATE_DIR%\newfile.pptx"
+if exist "%FIXED_TEMPLATE_DIR%\Normal.dotm" set "DOCX_TEMPLATE=%FIXED_TEMPLATE_DIR%\Normal.dotm"
+exit /b 0

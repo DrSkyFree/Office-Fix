@@ -16,6 +16,6 @@
 
 （2）仅只安装WPS时，按wps方案修复，识别WPS路径，复制模板到固定目录，写入注册表进行修复,并重启资源管理器;
 
- (3)Microsoft Office和WPS均安装时，让用户选择1.Microsoft Office fix new 2.WPS fix new，用户输入1或者2则开始执行修复方案。
+（3）Microsoft Office和WPS均安装时，让用户选择1.Microsoft Office fix new 2.WPS fix new，用户输入1或者2则开始执行修复方案。
 
 4、修复后验证右键新建在注册表是否成功写入，并重启资源管理器。

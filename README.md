@@ -6,7 +6,7 @@
 
 修复步骤：
 
-1、检测当前系统注册表是否存在Microsoft Office和WPS右键新建，若有则清理；
+1、检测当前系统注册表是否存在Microsoft Office和WPS右键新建，若有则清理,清理后刷新缓存并重启资源管理器;提示用户检查右键新建是否已完全没有.xlsx .pptx .docx .xls .ppt .doc，然后用户输入Y进行行后续，用户输入N，再次检查注册表是否还存在Microsoft Office和WPS右键新建相关值，若有再次清理，没有则直接继续后续工作。
 
 2、检测当前系统是否已安装Microsoft Office和WPS，若安装了分别列出Microsoft Office和WPS版本号，若没有则提示未检测到，并退出。
 
@@ -14,6 +14,8 @@
 
 （1）当前系统仅只安装了Microsoft Office则按Microsoft Office 右键新建方案进行修复，并刷新缓存让右键新建生效；
 
-（2）若当前系统仅安装WPS或者Microsoft Office与WPS二者同时安装，按照WPS修复方案进行，识别WPS路径，复制模板到固定目录，写入注册表进行修复；
+（2）仅只安装WPS时，按wps方案修复，识别WPS路径，复制模板到固定目录，写入注册表进行修复,并重启资源管理器;
 
-4、采用WPS修复方案修复后验证右键新建在注册表是否成功写入，并重启资源管理器。
+ (3)Microsoft Office和WPS均安装时，让用户选择1.Microsoft Office fix new 2.WPS fix new，用户输入1或者2则开始执行修复方案。
+
+4、修复后验证右键新建在注册表是否成功写入，并重启资源管理器。

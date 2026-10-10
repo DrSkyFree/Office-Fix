@@ -22,6 +22,9 @@
 
 4、修复后验证右键新建在注册表是否成功写入，并重启资源管理器。
 
+<img width="772" height="640" alt="image" src="https://github.com/user-attachments/assets/46beae2f-15bd-4b37-b57c-e9767ae1c8ae" />
+
+
 **使用说明：**
 
 fix_office_new.bat文件以CMD运行，RightClickNewFixGUI.ps1以powershell运行具有GUI操作界面，Releases下存放的是exe可执行文件，以上均需要以管理员身份运行。
